@@ -142,7 +142,7 @@ void loop() {
     // free memory
     esp_camera_fb_return(pic);
 
-    //vTaskDelay(1000 / portTICK_RATE_MS);
+    vTaskDelay(1000 / portTICK_RATE_MS);
   }
 
   client.loop();

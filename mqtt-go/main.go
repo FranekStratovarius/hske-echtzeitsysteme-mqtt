@@ -39,6 +39,7 @@ func mqtt_publish(client MQTT.Client, topic string, payload []byte) {
 
 func mqtt_topic_image(client MQTT.Client, payload []byte) {
 	//log.Printf("%s", string(payload))
+	log.Print("[/image]")
 	err := os.WriteFile("./light/img.jpg", payload, 0644)
 	check(err)
 	checkTrafficLightImage(client)
@@ -65,9 +66,9 @@ func main() {
 	opts.SetDefaultPublishHandler(func(client MQTT.Client, msg MQTT.Message) {
 		switch msg.Topic() {
 		case "/image":
-			go mqtt_topic_image(client, msg.Payload())
+			mqtt_topic_image(client, msg.Payload())
 		default:
-			go mqtt_topic_default(msg.Topic(), string(msg.Payload()))
+			mqtt_topic_default(msg.Topic(), string(msg.Payload()))
 		}
 		choke <- true
 	})
