@@ -13,6 +13,7 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
 #include "esp_camera.h"
+
 // select camera model
 #define CAMERA_MODEL_AI_THINKER
 #include "camera_pins.h"
@@ -26,8 +27,8 @@ TwoWire I2CSensors = TwoWire(0);
 Adafruit_MPU6050 mpu;
 
 char imuTemp[5];
-char imuGyro[45];
-char imuAccel[45];
+char imuGyro[20];
+char imuAccel[20];
 
 //const char ssid[] = "Handy von Louis";
 //const char pass[] = "einsbisacht";
@@ -69,8 +70,8 @@ void reconnect() {
     // Attempt to connect
     if (client.connect("esp32")) {
       Serial.println("connected");
-      client.publish("/hello","bin da.");
-      client.subscribe("/hello");
+      client.publish("status","bin da.");
+      client.subscribe("status");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -80,7 +81,7 @@ void reconnect() {
     }
   }
 
-  client.publish("/hello", "connected with broker!");
+  client.publish("status", "connected with broker!");
 }
 
 void setup_camera() {
@@ -148,15 +149,15 @@ void setup_camera() {
 }
 
 void calibrate() {
-  client.publish("/hello", "calibrating IMU...");
-  client.publish("/hello", "lay board on a bench...");
+  client.publish("status", "calibrating IMU...");
+  client.publish("status", "lay board on a bench...");
 
   delay(1000);
 
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  client.publish("/hello", "entering loop");
+  client.publish("status", "entering loop");
   for(int i=0; i<calibrationSamples; i++) {
     gyro_x_cal += g.gyro.x;
     gyro_y_cal += g.gyro.y;
@@ -164,7 +165,7 @@ void calibrate() {
     delay(100);
   }
 
-  client.publish("/hello", "calculating offset");
+  client.publish("status", "calculating offset");
   gyro_x_cal = gyro_x_cal/calibrationSamples;
   gyro_y_cal = gyro_y_cal/calibrationSamples;
   gyro_z_cal = gyro_z_cal/calibrationSamples;
@@ -173,23 +174,35 @@ void calibrate() {
 void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
   // MPU-6050-9250-I2C-CompFilter by MarkSherstan
   sprintf(imuTemp, "%f", temp.temperature);
-  client.publish("/temperature", imuTemp);
+  client.publish("2/imu/temp", imuTemp);
 
   freq = 1/((micros() - loopTimer2) * 1e-6);
   loopTimer2 = micros();
   dt = 1/freq;
 
-  // Send acceleration data
+  // Send out acceleration data
   accel_x = a.acceleration.x;
   accel_y = a.acceleration.y;
   accel_z = a.acceleration.z;
-  sprintf(imuAccel, "X: %f Y: %f Z: %f", accel_x, accel_y, accel_z);
-  client.publish("/acceleration", imuAccel);
+  sprintf(imuAccel, "%f", accel_x);
+  client.publish("2/imu/acc/x", imuAccel);
+  sprintf(imuAccel, "%f", accel_y);
+  client.publish("2/imu/acc/y", imuAccel);
+  sprintf(imuAccel, "%f", accel_z);
+  client.publish("2/imu/acc/z", imuAccel);
 
   // Subtract the offset calibration value
   gyro_x = g.gyro.x - gyro_x_cal;
   gyro_y = g.gyro.y - gyro_y_cal;
   gyro_z = g.gyro.z - gyro_z_cal;
+
+  // Send out gyro data
+  sprintf(imuGyro, "%f", gyro_x);
+  client.publish("2/imu/gyro/x", imuGyro);
+  sprintf(imuGyro, "%f", gyro_x);
+  client.publish("2/imu/gyro/y", imuGyro);
+  sprintf(imuGyro, "%f", gyro_x);
+  client.publish("2/imu/gyro/z", imuGyro);
 
   // Calculate Pitch and Roll from Accelerometer
   accelPitch = atan2(accel_y, accel_z) * RAD_TO_DEG;
@@ -199,9 +212,10 @@ void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
   pitch = (tau)*(pitch + gyro_x*dt) + (1-tau)*(accelPitch);
   roll = (tau)*(roll - gyro_y*dt) + (1-tau)*(accelRoll);
 
-  sprintf(imuGyro, "Pitch %f Roll %f", pitch, roll);
-  client.publish("/rotation", imuGyro);
-  client.publish("/rotation", " ");
+  sprintf(imuGyro, "%f", pitch);
+  client.publish("2/imu/pitch", imuGyro);
+  sprintf(imuGyro, "%f", roll);
+  client.publish("2/imu/roll", imuGyro);
 
   // Wait until the loopTimer reaches 4000us (250Hz) before next loop
   while (micros() - loopTimer <= 4000);
@@ -224,7 +238,7 @@ void setup() {
   // by Arduino. You need to set the IP address directly.
 
   client.setServer(server, 1883);
-  client.setCallback(callback);
+  client.setCallback(caklmllback);
   client.setBufferSize(10000);
   
   Serial.print("\nconnecting to broker...");
@@ -233,16 +247,16 @@ void setup() {
     delay(1000);
   }
 
-  client.publish("/hello", "initializing IMU...");
+  client.publish("status", "initializing IMU...");
 
   // Try to initialize!
   if (!mpu.begin(0x68, &I2CSensors)){
-  client.publish("/hello", "failed to find IMU!");
+  client.publish("status", "failed to find IMU!");
     while (1) {
       delay(10);
     }
   }
-  client.publish("/hello", "IMU found!");
+  client.publish("status", "IMU found!");
 
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
@@ -267,13 +281,11 @@ void loop() {
 
   if (pic) {
     // use pic->buf to access the image
-    //Serial.printf("Picture taken! Its size was: %zu bytes\n", pic->len);
-    bool success = client.publish("/image", pic->buf, pic->len, false);
-    //Serial.printf("picture send success: %i\n", success);
+    bool success = client.publish("2/cam", pic->buf, pic->len, false);
     // free memory
     esp_camera_fb_return(pic);
 
-    vTaskDelay(1000 / portTICK_RATE_MS);
+    delay(500);
   }
 
    /* Get new sensor events with the readings */
