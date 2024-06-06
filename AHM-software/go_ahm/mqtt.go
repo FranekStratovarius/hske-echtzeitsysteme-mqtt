@@ -24,9 +24,9 @@ func start_mqtt(dname string) {
 
 	opts.SetDefaultPublishHandler(func(client MQTT.Client, msg MQTT.Message) {
 		switch msg.Topic() {
-		case "/lidar":
+		case "lidar":
 			mqtt_topic_lidar(client, msg.Payload(), dname)
-		case "/image":
+		case "image":
 			mqtt_topic_image(msg.Payload(), dname)
 		default:
 			mqtt_topic_default(msg.Topic(), string(msg.Payload()))
@@ -38,14 +38,15 @@ func start_mqtt(dname string) {
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
 		panic(token.Error())
 	}
+	log.Print("connected to broker")
 
-	if token := client.Subscribe("#", byte(0), nil); token.Wait() && token.Error() != nil {
+	if token := client.Subscribe("status", byte(0), nil); token.Wait() && token.Error() != nil {
 		log.Fatal(token.Error())
 		os.Exit(1)
 	}
 
 	// publish
-	mqtt_publish(client, "test", []byte("testpayload von go"))
+	mqtt_publish(client, "status", []byte("testpayload von go"))
 
 	// subscribe
 	for {

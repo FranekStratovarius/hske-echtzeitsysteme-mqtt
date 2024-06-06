@@ -5,7 +5,8 @@ import (
 	"os"
 )
 
-var MQTT_BROKER = "tcp://localhost:1883"
+// var MQTT_BROKER = "tcp://localhost:1883"
+var MQTT_BROKER = "tcp://broker.hivemq.com:1883"
 var LIDAR_TRIGGER_DISTANCE = 100
 
 func check(e error) {

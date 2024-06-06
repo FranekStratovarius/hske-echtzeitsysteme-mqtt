@@ -9,7 +9,7 @@ import (
 )
 
 func mqtt_topic_image(payload []byte, dname string) {
-	log.Print("[/image]")
+	log.Print("[image]")
 	err := os.WriteFile(filepath.Join(dname, "img.jpg"), payload, 0644)
 	check(err)
 }
