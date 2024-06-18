@@ -1,0 +1,11 @@
+[
+{
+  "directory": "/mnt/vault/wichtiges/kempten/s8-ss24/echtzeitsysteme/pruefungsstudienarbeit/IMU-visualizer",
+  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Wall", "-Werror", "-O3", "-Iinclude", "-DPLATFORM_DESKTOP", "-I", "/home/louis/.xmake/packages/p/pahomqttcpp/v1.3.2/ef4c4776a67d43f08f2d4c3de767732c/include", "-I", "/home/louis/.xmake/packages/p/pahomqttc/v1.3.13/fd4a558ffb4542fc91f2be8b1c87aa6b/include", "-I", "/home/louis/.xmake/packages/r/raylib/5.0/aeed26e13a7a466f9d7c7ad6dd3b75c2/include", "-DNDEBUG", "-o", "build/.objs/soundengine-usage-example/linux/x86_64/release/src/main.cpp.o", "src/main.cpp"],
+  "file": "src/main.cpp"
+},
+{
+  "directory": "/mnt/vault/wichtiges/kempten/s8-ss24/echtzeitsysteme/pruefungsstudienarbeit/IMU-visualizer",
+  "arguments": ["/usr/bin/gcc", "-c", "-m64", "-fvisibility=hidden", "-fvisibility-inlines-hidden", "-Wall", "-Werror", "-O3", "-Iinclude", "-DPLATFORM_DESKTOP", "-I", "/home/louis/.xmake/packages/p/pahomqttcpp/v1.3.2/ef4c4776a67d43f08f2d4c3de767732c/include", "-I", "/home/louis/.xmake/packages/p/pahomqttc/v1.3.13/fd4a558ffb4542fc91f2be8b1c87aa6b/include", "-I", "/home/louis/.xmake/packages/r/raylib/5.0/aeed26e13a7a466f9d7c7ad6dd3b75c2/include", "-DNDEBUG", "-o", "build/.objs/soundengine-usage-example/linux/x86_64/release/src/mqtt.cpp.o", "src/mqtt.cpp"],
+  "file": "src/mqtt.cpp"
+}]
