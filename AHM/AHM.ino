@@ -30,14 +30,15 @@ char imuTemp[5];
 char imuGyro[20];
 char imuAccel[20];
 
-//const char ssid[] = "Handy von Louis";
-//const char pass[] = "einsbisacht";
-const char ssid[] = "Ellharter WGs";
-const char pass[] = "$M6_aPQs";
+const char ssid[] = "iPhone von Louis";
+const char pass[] = "einsbisacht";
+//const char ssid[] = "Ellharter WGs";
+//const char pass[] = "$M6_aPQs";
 
 WiFiClient net;
 PubSubClient client(net);
-IPAddress server(192, 168, 178, 41);
+//IPAddress server(192, 168, 178, 41);
+const char* server = "broker.hivemq.com";
 
 unsigned long lastMillis = 0;
 
@@ -53,14 +54,31 @@ int gyro_x, gyro_y, gyro_z;
 float gyro_x_cal, gyro_y_cal, gyro_z_cal;
 float accel_x, accel_y, accel_z;
 
+bool imu_active = 0;
+
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
-  Serial.print("] ");
+  Serial.print("] >");
   for (int i=0;i<length;i++) {
     Serial.print((char)payload[i]);
   }
-  Serial.println();
+  Serial.println("<");
+  Serial.printf("topic comparison: %i\n", strcmp(topic, "2/set_imu"));
+  if(strcmp(topic, "2/take_picture") == 0) {
+    Serial.println("taking picture...");
+    camera_fb_t *pic = esp_camera_fb_get();
+    if (pic) {
+      // use pic->buf to access the image
+      bool success = client.publish("2/cam", pic->buf, pic->len, false);
+      // free memory
+      esp_camera_fb_return(pic);
+    }
+  }
+  if(strcmp(topic, "2/set_imu") == 0) {
+    imu_active = payload[0] & 0b1;
+    Serial.printf("| imu_active: %d\n", imu_active);
+  }
 }
 
 void reconnect() {
@@ -70,8 +88,9 @@ void reconnect() {
     // Attempt to connect
     if (client.connect("esp32")) {
       Serial.println("connected");
-      client.publish("status","bin da.");
-      client.subscribe("status");
+      client.publish("2/status","bin da.");
+      client.subscribe("2/take_picture");
+      client.subscribe("2/set_imu");
     } else {
       Serial.print("failed, rc=");
       Serial.print(client.state());
@@ -81,7 +100,7 @@ void reconnect() {
     }
   }
 
-  client.publish("status", "connected with broker!");
+  client.publish("2/status", "connected with broker!");
 }
 
 void setup_camera() {
@@ -105,7 +124,8 @@ void setup_camera() {
   config.pin_pwdn = PWDN_GPIO_NUM;
   config.pin_reset = RESET_GPIO_NUM;
   config.xclk_freq_hz = 20000000;
-  config.frame_size = FRAMESIZE_UXGA;
+  //config.frame_size = FRAMESIZE_UXGA;
+  config.frame_size = FRAMESIZE_QVGA;
   config.pixel_format = PIXFORMAT_JPEG; // for streaming
   //config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition
   config.grab_mode = CAMERA_GRAB_WHEN_EMPTY;
@@ -142,22 +162,24 @@ void setup_camera() {
     s->set_brightness(s, 1); // up the brightness just a bit
     s->set_saturation(s, -2); // lower the saturation
   }
+  /*
   // drop down frame size for higher initial frame rate
   if(config.pixel_format == PIXFORMAT_JPEG){
     s->set_framesize(s, FRAMESIZE_QVGA);
   }
+  */
 }
 
 void calibrate() {
-  client.publish("status", "calibrating IMU...");
-  client.publish("status", "lay board on a bench...");
+  client.publish("2/status", "calibrating IMU...");
+  client.publish("2/status", "lay board on a bench...");
 
   delay(1000);
 
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  client.publish("status", "entering loop");
+  client.publish("2/status", "entering loop");
   for(int i=0; i<calibrationSamples; i++) {
     gyro_x_cal += g.gyro.x;
     gyro_y_cal += g.gyro.y;
@@ -165,7 +187,7 @@ void calibrate() {
     delay(100);
   }
 
-  client.publish("status", "calculating offset");
+  client.publish("2/status", "calculating offset");
   gyro_x_cal = gyro_x_cal/calibrationSamples;
   gyro_y_cal = gyro_y_cal/calibrationSamples;
   gyro_z_cal = gyro_z_cal/calibrationSamples;
@@ -238,25 +260,28 @@ void setup() {
   // by Arduino. You need to set the IP address directly.
 
   client.setServer(server, 1883);
-  client.setCallback(caklmllback);
+  client.setCallback(callback);
   client.setBufferSize(10000);
   
   Serial.print("\nconnecting to broker...");
-  while (!client.connect("arduino", "public", "public")) {
-    Serial.print(".");
-    delay(1000);
+  if (!client.connected()) {
+    reconnect();
   }
+  Serial.print("\nconneced to broker.\n");
+
+  boolean sent = client.publish("2/status", "ESP ist da.");
+  Serial.printf("sent: %d\n", sent);
 
   client.publish("status", "initializing IMU...");
 
   // Try to initialize!
   if (!mpu.begin(0x68, &I2CSensors)){
-  client.publish("status", "failed to find IMU!");
+  client.publish("2/status", "failed to find IMU!");
     while (1) {
       delay(10);
     }
   }
-  client.publish("status", "IMU found!");
+  client.publish("2/status", "IMU found!");
 
   mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
   mpu.setGyroRange(MPU6050_RANGE_500_DEG);
@@ -268,6 +293,8 @@ void setup() {
 
   setup_camera();
 
+  client.publish("2/status", "ESP setup finished");
+
   delay(100);
 }
 
@@ -277,21 +304,13 @@ void loop() {
     reconnect();
   }
 
-  camera_fb_t *pic = esp_camera_fb_get();
+  if(imu_active) {
+    /* Get new sensor events with the readings */
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
 
-  if (pic) {
-    // use pic->buf to access the image
-    bool success = client.publish("2/cam", pic->buf, pic->len, false);
-    // free memory
-    esp_camera_fb_return(pic);
-
-    delay(500);
+    imu(a, g, temp);
+    delay(50);
   }
-
-   /* Get new sensor events with the readings */
-  sensors_event_t a, g, temp;
-  mpu.getEvent(&a, &g, &temp);
-
-  imu(a, g, temp);
   client.loop();
 }
