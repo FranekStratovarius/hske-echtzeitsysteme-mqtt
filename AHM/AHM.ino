@@ -30,10 +30,10 @@ char imuTemp[5];
 char imuGyro[20];
 char imuAccel[20];
 
-const char ssid[] = "iPhone von Louis";
-const char pass[] = "einsbisacht";
-//const char ssid[] = "Ellharter WGs";
-//const char pass[] = "$M6_aPQs";
+// const char ssid[] = "iPhone von Louis";
+// const char pass[] = "einsbisacht";
+const char ssid[] = "Ellharter WGs";
+const char pass[] = "$M6_aPQs";
 
 WiFiClient net;
 PubSubClient client(net);
@@ -47,13 +47,16 @@ float accelPitch, accelRoll;
 float freq, dt;
 float tau = 0.98;
 
-float roll = 0;
+float roll = false;
 float pitch = 0;
 
-int gyro_x, gyro_y, gyro_z;
-float gyro_x_cal, gyro_y_cal, gyro_z_cal;
-float accel_x, accel_y, accel_z;
+float gyro_x = 0.0, gyro_y = 0.0, gyro_z = 0.0;
+float gyro_x_cal = 0.0, gyro_y_cal = 0.0, gyro_z_cal = 0.0;
+float accel_x = 0.0, accel_y = 0.0, accel_z = 0.0;
+float accel_x_cal = 0.0, accel_y_cal = 0.0;
+#define RAD_TO_DEG (180/3.14)
 
+bool imu_init = 0;
 bool imu_active = 0;
 
 void callback(char* topic, byte* payload, unsigned int length) {
@@ -65,6 +68,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
   Serial.println("<");
   Serial.printf("topic comparison: %i\n", strcmp(topic, "2/set_imu"));
+  
   if(strcmp(topic, "2/take_picture") == 0) {
     Serial.println("taking picture...");
     camera_fb_t *pic = esp_camera_fb_get();
@@ -170,41 +174,65 @@ void setup_camera() {
   */
 }
 
-void calibrate() {
+void calibrate_imu() {
   client.publish("2/status", "calibrating IMU...");
-  client.publish("2/status", "lay board on a bench...");
+  client.publish("2/status", "lay board on a flat surface...");
 
   delay(1000);
 
   sensors_event_t a, g, temp;
   mpu.getEvent(&a, &g, &temp);
 
-  client.publish("2/status", "entering loop");
   for(int i=0; i<calibrationSamples; i++) {
     gyro_x_cal += g.gyro.x;
     gyro_y_cal += g.gyro.y;
     gyro_z_cal += g.gyro.z;
-    delay(100);
+    delay(50);
   }
+  gyro_x_cal /= calibrationSamples;
+  gyro_y_cal /= calibrationSamples;
+  gyro_z_cal /= calibrationSamples;
 
-  client.publish("2/status", "calculating offset");
-  gyro_x_cal = gyro_x_cal/calibrationSamples;
-  gyro_y_cal = gyro_y_cal/calibrationSamples;
-  gyro_z_cal = gyro_z_cal/calibrationSamples;
+  for(int i=0; i<calibrationSamples; i++) {
+    accel_x_cal += a.acceleration.x;
+    accel_y_cal += a.acceleration.y;
+    delay(50);
+  }
+  accel_x_cal /= calibrationSamples;
+  accel_y_cal /= calibrationSamples;
+
+  client.publish("2/status", "IMU calibration done!");
+}
+
+void setup_imu() {
+  imu_init = mpu.begin(0x68, &I2CSensors);
+
+  if (!imu_init) {
+    client.publish("2/status", "failed to find IMU...");
+    client.publish("2/status", "will try again...");
+  }
+  else {
+    client.publish("2/status", "IMU found!");
+
+    // Range & Digital Low-Pass Filter
+    mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
+    mpu.setGyroRange(MPU6050_RANGE_250_DEG);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
+
+    calibrate_imu();
+  }
 }
 
 void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
-  // MPU-6050-9250-I2C-CompFilter by MarkSherstan
-  sprintf(imuTemp, "%f", temp.temperature);
-  client.publish("2/imu/temp", imuTemp);
 
+  // Calculate time step
   freq = 1/((micros() - loopTimer2) * 1e-6);
   loopTimer2 = micros();
   dt = 1/freq;
 
-  // Send out acceleration data
-  accel_x = a.acceleration.x;
-  accel_y = a.acceleration.y;
+  // Subtract the offset calibration value & send out acceleration data
+  accel_x = a.acceleration.x - accel_x_cal;
+  accel_y = a.acceleration.y - accel_y_cal;
   accel_z = a.acceleration.z;
   sprintf(imuAccel, "%f", accel_x);
   client.publish("2/imu/acc/x", imuAccel);
@@ -213,12 +241,10 @@ void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
   sprintf(imuAccel, "%f", accel_z);
   client.publish("2/imu/acc/z", imuAccel);
 
-  // Subtract the offset calibration value
+  // Subtract the offset calibration value & send out gyro data
   gyro_x = g.gyro.x - gyro_x_cal;
   gyro_y = g.gyro.y - gyro_y_cal;
   gyro_z = g.gyro.z - gyro_z_cal;
-
-  // Send out gyro data
   sprintf(imuGyro, "%f", gyro_x);
   client.publish("2/imu/gyro/x", imuGyro);
   sprintf(imuGyro, "%f", gyro_x);
@@ -227,17 +253,22 @@ void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
   client.publish("2/imu/gyro/z", imuGyro);
 
   // Calculate Pitch and Roll from Accelerometer
-  accelPitch = atan2(accel_y, accel_z) * RAD_TO_DEG;
-  accelRoll = atan2(accel_x, accel_z) * RAD_TO_DEG;
+  accelPitch = atan2(-accel_x, sqrt(accel_y * accel_y + accel_z * accel_z)) * RAD_TO_DEG;
+  accelRoll = atan2(accel_y, sqrt(accel_x * accel_x + accel_z * accel_z)) * RAD_TO_DEG;
 
   // Complementary filter
   pitch = (tau)*(pitch + gyro_x*dt) + (1-tau)*(accelPitch);
-  roll = (tau)*(roll - gyro_y*dt) + (1-tau)*(accelRoll);
-
+  roll = (tau)*(roll + gyro_y*dt) + (1-tau)*(accelRoll);
+  
+  // Send out pitch and roll
   sprintf(imuGyro, "%f", pitch);
   client.publish("2/imu/pitch", imuGyro);
   sprintf(imuGyro, "%f", roll);
   client.publish("2/imu/roll", imuGyro);
+
+  // Send out temperature
+  sprintf(imuTemp, "%f", temp.temperature);
+  client.publish("2/imu/temp", imuTemp);
 
   // Wait until the loopTimer reaches 4000us (250Hz) before next loop
   while (micros() - loopTimer <= 4000);
@@ -248,69 +279,57 @@ void setup() {
   Serial.begin(115200);
   WiFi.begin(ssid, pass);
 
+  I2CSensors.begin(I2C_SDA, I2C_SCL, 100000);
+  while (!Serial) delay(10); // will pause Zero, Leonardo, etc until serial console opens
+
   while (WiFi.status() != WL_CONNECTED) {
     Serial.print(".");
     delay(1000);
   }
 
-  I2CSensors.begin(I2C_SDA, I2C_SCL, 100000);
-  while (!Serial) delay(10); // will pause Zero, Leonardo, etc until serial console opens
-
-  // Note: Local domain names (e.g. "Computer.local" on OSX) are not supported
-  // by Arduino. You need to set the IP address directly.
-
+  // Setup MQTT-Client
   client.setServer(server, 1883);
   client.setCallback(callback);
-  client.setBufferSize(10000);
+  client.setBufferSize(30000);
   
+  // Connect to broker
   Serial.print("\nconnecting to broker...");
   if (!client.connected()) {
     reconnect();
   }
-  Serial.print("\nconneced to broker.\n");
+  Serial.print("\nconnected to broker!\n");
 
-  boolean sent = client.publish("2/status", "ESP ist da.");
+  boolean sent = client.publish("2/status", "ESP32 ist da.");
   Serial.printf("sent: %d\n", sent);
 
-  client.publish("status", "initializing IMU...");
+  // Try to initialize IMU
+  client.publish("2/status", "initializing IMU...");
+  setup_imu();
 
-  // Try to initialize!
-  if (!mpu.begin(0x68, &I2CSensors)){
-  client.publish("2/status", "failed to find IMU!");
-    while (1) {
-      delay(10);
-    }
-  }
-  client.publish("2/status", "IMU found!");
-
-  mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
-  mpu.setGyroRange(MPU6050_RANGE_500_DEG);
-
-  // Digital Low-Pass Filter
-  mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
-
-  calibrate();
-
+  // Initialize ESP32's camera
   setup_camera();
 
-  client.publish("2/status", "ESP setup finished");
-
+  client.publish("2/status", "ESP32 setup finished");
   delay(100);
 }
 
 void loop() {
-  //delay(10);  // <- fixes some issues with WiFi stability
+  delay(10);
   if (!client.connected()) {
     reconnect();
   }
 
-  if(imu_active) {
+  if(!imu_init) {
+    setup_imu();
+  }
+
+  if(imu_init && imu_active) {
     /* Get new sensor events with the readings */
     sensors_event_t a, g, temp;
     mpu.getEvent(&a, &g, &temp);
 
     imu(a, g, temp);
-    delay(50);
+    delay(30);
   }
   client.loop();
 }
