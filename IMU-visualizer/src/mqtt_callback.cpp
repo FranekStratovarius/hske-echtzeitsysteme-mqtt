@@ -1,3 +1,4 @@
+#include <fstream>
 #include "mqtt_callback.h"
 #include "mqtt_constants.h"
 
@@ -43,7 +44,9 @@ void Callback::message_arrived(mqtt::const_message_ptr msg) {
 	std::cout << "Message arrived" << std::endl;
 	std::cout << "\ttopic: '" << msg->get_topic() << "'" << std::endl;
 	std::cout << "\tpayload: '" << msg->to_string() << "'\n" << std::endl;
-	// *output = "[" + msg->get_topic() + "] " + msg->to_string() + "\n" + *output;
+	if(msg->get_topic() == "2/status") {
+		md->status = msg->to_string();
+	}
 	if(msg->get_topic() == "2/imu/temp") {
 		md->temp = msg->to_string();
 	}
@@ -59,7 +62,10 @@ void Callback::message_arrived(mqtt::const_message_ptr msg) {
 	if(msg->get_topic() == "2/imu/acc/y") {
 		md->pos_y = std::stof(msg->to_string());
 	}
-	if(msg->get_topic() == "2/imu/acc/z") {
-		md->pos_z = std::stof(msg->to_string());
+	if(msg->get_topic() == "2/cam") {
+		std::ofstream file;
+		file.open("image.jpeg", std::ios::binary | std::ios::out);
+		file.write(msg->get_payload().data(), msg->get_payload().length());
+		file.close();
 	}
 }

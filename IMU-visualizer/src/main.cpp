@@ -6,7 +6,7 @@
 #include "mqtt_constants.h"
 
 int main(void) {
-	std::string output = "";
+	std::string log = "";
 	mqtt_data md = {
 		.pos_x = 0.0,
 		.pos_y = 0.0,
@@ -39,6 +39,7 @@ int main(void) {
 		return 1;
 	}
 	//*/
+
 	
 	const int screenWidth = 800;
 	const int screenHeight = 450;
@@ -59,7 +60,18 @@ int main(void) {
 		if(IsKeyDown(KEY_D)) {
 			mqtt->send_message("2/imu/acc/x", "0.5");
 		}
-		// spherePos.x = md.pos_x;
+		if(IsKeyPressed(KEY_X)) {
+			log = "stopping IMU\n" + log;
+			mqtt->send_message("2/set_imu", "0");
+		}
+		if(IsKeyPressed(KEY_C)) {
+			log = "starting IMU\n" + log;
+			mqtt->send_message("2/set_imu", "1");
+		}
+		if(IsKeyPressed(KEY_V)) {
+			log = "taking picture\n" + log;
+			mqtt->send_message("2/take_picture", "");
+		}
 		BeginDrawing();
 			ClearBackground(RAYWHITE);
 			BeginMode3D(camera);
@@ -68,8 +80,8 @@ int main(void) {
 				float scaling = 0.1;
 				rlTranslatef(
 					md.pos_x * scaling,
-					md.pos_y * scaling,
-					md.pos_z * scaling
+					md.pos_z * scaling,
+					md.pos_y * scaling
 				);
 				rlRotatef(md.roll, 0, 0, 1);
 				rlRotatef(md.pitch, 1, 0, 0);
@@ -84,8 +96,18 @@ int main(void) {
 			EndMode3D();
 			DrawText(
 				TextFormat("%s °C", md.temp.c_str()),
-				10, 10, 20, GRAY
+				10, 20, 20, GRAY
 			);
+			DrawText(
+				md.status.c_str(),
+				10, 40, 20, GRAY
+			);
+			DrawText(
+				log.c_str(),
+				10, 60, 20, GRAY
+			);
+
+			// DrawTexture(texture, screenWidth/2 - texture.width/2, screenHeight/2 - texture.height/2, WHITE);
 		EndDrawing();
 	}
 	CloseWindow();
