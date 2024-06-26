@@ -59,6 +59,9 @@ float accel_x_cal = 0.0, accel_y_cal = 0.0;
 bool imu_init = 0;
 bool imu_active = 0;
 
+int64_t timer_divisor = 1000000 * 5;
+int64_t timer = 0;
+
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -276,6 +279,7 @@ void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
 }
 
 void setup() {
+  timer = esp_timer_get_time()/timer_divisor;
   Serial.begin(115200);
   WiFi.begin(ssid, pass);
 
@@ -314,9 +318,20 @@ void setup() {
 }
 
 void loop() {
-  delay(10);
+  int64_t ltime = esp_timer_get_time()/timer_divisor;
+  delay(10);  // <- fixes some issues with WiFi stability
   if (!client.connected()) {
     reconnect();
+  }
+
+  if (timer < ltime) {
+    timer = ltime;
+    Serial.print("ping\n");
+    if(timer % 2 == 0) {
+      client.publish("2/status", "ping");
+    } else {
+      client.publish("2/status", "pong");
+    }
   }
 
   if(!imu_init) {
