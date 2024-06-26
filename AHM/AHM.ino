@@ -54,6 +54,7 @@ float gyro_x = 0.0, gyro_y = 0.0, gyro_z = 0.0;
 float gyro_x_cal = 0.0, gyro_y_cal = 0.0, gyro_z_cal = 0.0;
 float accel_x = 0.0, accel_y = 0.0, accel_z = 0.0;
 float accel_x_cal = 0.0, accel_y_cal = 0.0;
+#define RAD_TO_DEG (180/3.14)
 
 bool imu_init = 0;
 bool imu_active = 0;
@@ -211,18 +212,18 @@ void setup_imu() {
     client.publish("2/status", "will try again...");
   }
   else {
+    client.publish("2/status", "IMU found!");
+
     // Range & Digital Low-Pass Filter
     mpu.setAccelerometerRange(MPU6050_RANGE_2_G);
     mpu.setGyroRange(MPU6050_RANGE_250_DEG);
-    mpu.setFilterBandwidth(MPU6050_BAND_5_HZ);
+    mpu.setFilterBandwidth(MPU6050_BAND_21_HZ);
 
-    client.publish("2/status", "IMU found!");
     calibrate_imu();
   }
 }
 
 void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
-  // MPU-6050-9250-I2C-CompFilter by MarkSherstan
 
   // Calculate time step
   freq = 1/((micros() - loopTimer2) * 1e-6);
@@ -252,12 +253,12 @@ void imu(sensors_event_t a, sensors_event_t g, sensors_event_t temp) {
   client.publish("2/imu/gyro/z", imuGyro);
 
   // Calculate Pitch and Roll from Accelerometer
-  accelPitch = atan2(accel_y, accel_z) * RAD_TO_DEG;
-  accelRoll = atan2(accel_x, accel_z) * RAD_TO_DEG;
+  accelPitch = atan2(-accel_x, sqrt(accel_y * accel_y + accel_z * accel_z)) * RAD_TO_DEG;
+  accelRoll = atan2(accel_y, sqrt(accel_x * accel_x + accel_z * accel_z)) * RAD_TO_DEG;
 
   // Complementary filter
   pitch = (tau)*(pitch + gyro_x*dt) + (1-tau)*(accelPitch);
-  roll = (tau)*(roll - gyro_y*dt) + (1-tau)*(accelRoll);
+  roll = (tau)*(roll + gyro_y*dt) + (1-tau)*(accelRoll);
   
   // Send out pitch and roll
   sprintf(imuGyro, "%f", pitch);
