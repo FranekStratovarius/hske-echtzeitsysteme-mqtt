@@ -1,8 +1,9 @@
 package main
 
 import (
-	"log"
 	"os"
+	"path/filepath"
+	"time"
 )
 
 // var MQTT_BROKER = "tcp://localhost:1883"
@@ -15,15 +16,12 @@ func check(e error) {
 	}
 }
 
-func mqtt_topic_default(topic string, payload string) {
-	log.Printf("[%s] %s", topic, payload)
-}
-
 func main() {
-	// create temp directory to save the images to
-	// dname, err := os.MkdirTemp("", "ahm_traffic_light_data")
-	dname := "ahm_traffic_light_data"
-	os.Mkdir(dname, 0777)
+	println(time.Now().String())
+	// create directory to save the images to
+	directory_name := "ahm_traffic_light_data"
+	os.Mkdir(directory_name, 0777)
+	os.Mkdir(filepath.Join(directory_name, "drivers"), 0777)
 
-	start_mqtt(dname)
+	start_mqtt(directory_name)
 }
