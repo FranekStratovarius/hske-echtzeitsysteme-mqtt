@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"time"
 )
 
 // var MQTT_BROKER = "tcp://localhost:1883"
@@ -17,7 +16,6 @@ func check(e error) {
 }
 
 func main() {
-	println(time.Now().String())
 	// create directory to save the images to
 	directory_name := "ahm_traffic_light_data"
 	os.Mkdir(directory_name, 0777)

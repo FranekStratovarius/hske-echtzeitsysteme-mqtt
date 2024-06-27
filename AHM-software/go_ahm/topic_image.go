@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
 )
@@ -20,7 +22,7 @@ func mqtt_topic_traffic_light_image(client MQTT.Client, payload []byte, director
 }
 
 func mqtt_topic_driver_image(payload []byte, directory_name string) {
-	save_image(payload, filepath.Join(directory_name, "drivers", ".jpg"))
+	save_image(payload, filepath.Join(directory_name, "drivers", fmt.Sprintf(time.Now().String(), ".jpg")))
 }
 
 func save_image(image []byte, file_path string) {
